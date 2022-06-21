@@ -1,0 +1,29 @@
+make run QEMU_VIRTFS_ENABLE=y QEMU_USERNET_ENABLE=y QEMU_VIRTFS_HOST_DIR=~/tests/
+
+https://optee.readthedocs.io/en/latest/building/devices/qemu.html
+
+# mkdir -p /mnt/host
+# mount -t 9p -o trans=virtio host /mnt/host
+
+mount -t 9p -o trans=virtio host /mnt/host
+cd /mnt/host/tz_datasets/
+mkdir -p /root/data/mnist/images
+cp data/mnist/images/* /root/data/mnist/images
+darknetp classifier train -pp_start 5 -pp_end 10 cfg/mnist.dataset cfg/mnist_lenet.cfg
+
+darknetp classifier train -pp_start 1 -pp_end 2 cfg/mnist.dataset cfg/mnist_lenet.cfg
+
+cd /home/user/build/../out/bin && /home/user/build/../qemu/build/aarch64-softmmu/qemu-system-aarch64 \
+    -nographic \
+    -serial tcp:localhost:54320 -serial tcp:localhost:54321 \
+    -smp 2 \
+    -s -S -machine virt,secure=on,mte=off,gic-version=3,virtualization=false \
+    -cpu max,sve=off \
+    -d unimp -semihosting-config enable=on,target=native \
+    -m 1057 \
+    -bios bl1.bin \
+    -initrd rootfs.cpio.gz \
+    -kernel Image -no-acpi \
+    -append 'console=ttyAMA0,38400 keep_bootcon root=/dev/vda2 ' \
+     \
+    -object rng-random,filename=/dev/urandom,id=rng0 -device virtio-rng-pci,rng=rng0,max-bytes=1024,period=1000 -fsdev local,id=fsdev0,path=/home/user/tests/,security_model=none -device virtio-9p-device,fsdev=fsdev0,mount_tag=host -netdev user,id=vmnic -device virtio-net-device,netdev=vmnic
